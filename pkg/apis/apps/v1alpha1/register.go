@@ -10,6 +10,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/runtime/scheme"
 )
 
+const (
+	APIManagerKind = "APIManager"
+)
+
 var (
 	// SchemeGroupVersion is group version used to register these objects
 	SchemeGroupVersion = schema.GroupVersion{Group: "apps.3scale.net", Version: "v1alpha1"}
