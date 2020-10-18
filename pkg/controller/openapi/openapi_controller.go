@@ -186,7 +186,21 @@ func (r *ReconcileOpenapi) reconcileSpec(openapiCR *capabilitiesv1beta1.Openapi)
 		return statusReconciler, reconcile.Result{}, err
 	}
 
-	_, err = r.readOpenAPI(openapiCR)
+	openapiObj, err := r.readOpenAPI(openapiCR)
+	if err != nil {
+		statusReconciler := NewStatusReconciler(r.BaseReconciler, openapiCR, providerAccount.AdminURLStr, err, false)
+		return statusReconciler, reconcile.Result{}, err
+	}
+
+	backendReconciler := NewBackendReconciler(r.BaseReconciler, openapiCR, openapiObj, providerAccount, logger)
+	_, err = backendReconciler.Reconcile()
+	if err != nil {
+		statusReconciler := NewStatusReconciler(r.BaseReconciler, openapiCR, providerAccount.AdminURLStr, err, false)
+		return statusReconciler, reconcile.Result{}, err
+	}
+
+	productReconciler := NewProductReconciler(r.BaseReconciler, openapiCR, openapiObj, providerAccount, logger)
+	_, err = productReconciler.Reconcile()
 	if err != nil {
 		statusReconciler := NewStatusReconciler(r.BaseReconciler, openapiCR, providerAccount.AdminURLStr, err, false)
 		return statusReconciler, reconcile.Result{}, err
@@ -296,12 +310,6 @@ func (r *ReconcileOpenapi) readOpenAPIConfigMap(resource *capabilitiesv1beta1.Op
 		return nil, &helper.SpecFieldError{
 			ErrorType:      helper.InvalidError,
 			FieldErrorList: fieldErrors,
-		}
-	}
-
-	for pathStr, pathItem := range openapiObj.Paths {
-		for opKey := range pathItem.Operations() {
-			r.Logger().Info("openapi path", opKey, pathStr)
 		}
 	}
 
