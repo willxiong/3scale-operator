@@ -47,32 +47,32 @@ func (p *BackendReconciler) Logger() logr.Logger {
 }
 
 func (p *BackendReconciler) Reconcile() ([]*capabilitiesv1beta1.Backend, error) {
-	desiredBackend, err := p.desiredBackend()
+	desired, err := p.desired()
 	if err != nil {
 		return nil, err
 	}
 
 	// single backend implementation
-	return nil, p.ReconcileResource(&capabilitiesv1beta1.Backend{}, desiredBackend, p.backendMutator)
+	return nil, p.ReconcileResource(&capabilitiesv1beta1.Backend{}, desired, p.backendMutator)
 }
 
-func (p *BackendReconciler) desiredBackend() (*capabilitiesv1beta1.Backend, error) {
-	// backend system name
-	backendSystemName := p.desiredBackendSystemName()
+func (p *BackendReconciler) desired() (*capabilitiesv1beta1.Backend, error) {
+	// system name
+	systemName := p.desiredSystemName()
 
 	// obj name
-	backendObjName := p.desiredBackendObjName()
+	objName := p.desiredObjName()
 
-	errStrings := validation.IsDNS1123Label(backendObjName)
+	errStrings := validation.IsDNS1123Label(objName)
 	if len(errStrings) > 0 {
 		return nil, errors.New(strings.Join(errStrings, "--"))
 	}
 
 	// backend name
-	backendName := fmt.Sprintf("%s Backend", p.openapiObj.Info.Title)
+	name := fmt.Sprintf("%s Backend", p.openapiObj.Info.Title)
 
 	// backend description
-	backendDescription := fmt.Sprintf("Backend of %s", p.openapiObj.Info.Title)
+	description := fmt.Sprintf("Backend of %s", p.openapiObj.Info.Title)
 
 	// private base URL
 	// take only first server
@@ -94,14 +94,14 @@ func (p *BackendReconciler) desiredBackend() (*capabilitiesv1beta1.Backend, erro
 
 	backend := &capabilitiesv1beta1.Backend{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      backendObjName,
+			Name:      objName,
 			Namespace: p.openapiCR.Namespace,
 		},
 		Spec: capabilitiesv1beta1.BackendSpec{
-			Name:               backendName,
-			SystemName:         backendSystemName,
+			Name:               name,
+			SystemName:         systemName,
 			PrivateBaseURL:     privateBaseURL,
-			Description:        backendDescription,
+			Description:        description,
 			ProviderAccountRef: p.openapiCR.Spec.ProviderAccountRef,
 		},
 	}
@@ -142,6 +142,10 @@ func (p *BackendReconciler) backendMutator(existingObj, desiredObj common.Kubern
 	}
 	updated = updated || updatedTmp
 
+	// Maybe too rough compare method?
+	// What if backend controller adds or modifies something?
+	// the openapi controller will be reconciliating.
+	// maybe compare only "managed" fields
 	if !reflect.DeepEqual(existing.Spec, desired.Spec) {
 		diff := cmp.Diff(existing.Spec, desired.Spec)
 		p.Logger().Info(fmt.Sprintf("%s spec has changed: %s", common.ObjectInfo(desired), diff))
@@ -152,8 +156,9 @@ func (p *BackendReconciler) backendMutator(existingObj, desiredObj common.Kubern
 	return updated, nil
 }
 
-func (p *BackendReconciler) desiredBackendSystemName() string {
+func (p *BackendReconciler) desiredSystemName() string {
 	// Same as product system name
+	// Duplicated implementation. Refactor
 	if p.openapiCR.Spec.ProductSystemName != "" {
 		return p.openapiCR.Spec.ProductSystemName
 	}
@@ -161,12 +166,11 @@ func (p *BackendReconciler) desiredBackendSystemName() string {
 	return helper.SystemNameFromOpenAPITitle(p.openapiObj)
 }
 
-func (p *BackendReconciler) desiredBackendObjName() string {
+func (p *BackendReconciler) desiredObjName() string {
 	// DNS1123 Label compliant name. Due to UIDs are 36 characters of length this
 	// means that the maximum prefix lenght that can be provided is of 26
 	// characters. If the generated name is not DNS1123 compliant an error is
 	// returned
 	// Maybe truncate?
 	return fmt.Sprintf("%s-%s", helper.K8sNameFromOpenAPITitle(p.openapiObj), string(p.openapiCR.UID))
-
 }
