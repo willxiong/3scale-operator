@@ -62,3 +62,34 @@ func RenderOpenAPIServerURL(server *openapi3.Server) (string, error) {
 
 	return tpl.String(), nil
 }
+
+type ExtendedSecurityRequirement struct {
+	*openapi3.SecuritySchemeRef
+
+	Scopes []string
+}
+
+func NewExtendedSecurityRequirement(secSchemeRef *openapi3.SecuritySchemeRef, scopes []string) *ExtendedSecurityRequirement {
+	return &ExtendedSecurityRequirement{
+		SecuritySchemeRef: secSchemeRef,
+		Scopes:            scopes,
+	}
+}
+
+func OpenAPIGlobalSecurityRequirements(openapiObj *openapi3.Swagger) []*ExtendedSecurityRequirement {
+	extendedSecRequirements := make([]*ExtendedSecurityRequirement, 0)
+
+	for _, secReq := range openapiObj.Security {
+		for secReqItemName, scopes := range secReq {
+			secScheme, ok := openapiObj.Components.SecuritySchemes[secReqItemName]
+			if !ok {
+				// should never happen. OpenAPI validation should detect this issue
+				continue
+			}
+
+			extendedSecRequirements = append(extendedSecRequirements, NewExtendedSecurityRequirement(secScheme, scopes))
+		}
+	}
+
+	return extendedSecRequirements
+}

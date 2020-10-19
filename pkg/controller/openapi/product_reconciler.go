@@ -184,14 +184,48 @@ func (p *ProductReconciler) desiredDeployment() *capabilitiesv1beta1.ProductDepl
 			Authentication: p.desiredAuthentication(),
 		}
 	}
+
+	return deployment
 }
 
 func (p *ProductReconciler) desiredAuthentication() *capabilitiesv1beta1.AuthenticationSpec {
-	// nil value also returns 0 length
-	if len(p.openapiObj.Security) == 0 {
+	globalSecRequirements := helper.OpenAPIGlobalSecurityRequirements(p.openapiObj)
+	if len(globalSecRequirements) == 0 {
 		return nil
 	}
 
-	authentication := &capabilitiesv1beta1.ProductDeploymentSpec{}
-	return authentication
+	// Only the first one is used
+	secRequirementExtended := globalSecRequirements[0]
+
+	var authenticationSpec *capabilitiesv1beta1.AuthenticationSpec
+
+	switch secRequirementExtended.Value.Type {
+	// TODO types "oauth2", "openIdConnect"
+	case "apiKey":
+		authenticationSpec = p.desiredUserKeyAuthentication(secRequirementExtended)
+	}
+
+	return authenticationSpec
+}
+
+func (p *ProductReconciler) desiredUserKeyAuthentication(secReq *helper.ExtendedSecurityRequirement) *capabilitiesv1beta1.AuthenticationSpec {
+	return &capabilitiesv1beta1.AuthenticationSpec{
+		UserKeyAuthentication: &capabilitiesv1beta1.UserKeyAuthenticationSpec{
+			Key:            &secReq.Value.Name,
+			CredentialsLoc: p.parseUserKeyCredentialsLoc(secReq.Value.In),
+		},
+	}
+}
+
+func (p *ProductReconciler) parseUserKeyCredentialsLoc(inField string) *string {
+	tmpQuery := "query"
+	tmpHeaders := "headers"
+	switch inField {
+	case "query":
+		return &tmpQuery
+	case "header":
+		return &tmpHeaders
+	default:
+		return nil
+	}
 }
